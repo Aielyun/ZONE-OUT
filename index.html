@@ -173,6 +173,24 @@
   .sw-inline .sw-btn{border:none;background:var(--accent);color:#fff;border-radius:4px;padding:3px 10px;font-size:10px;cursor:pointer;font-family:inherit;font-weight:600;transition:.15s;white-space:nowrap;line-height:1.5}
   .sw-inline .sw-btn:hover{opacity:.88}
   .sw-inline .sw-btn:disabled{opacity:.5;cursor:not-allowed}
+  /* 店铺图片区 */
+  .poi-imgs{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+  .poi-imgs .sw-title{font-size:12px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:4px;margin-bottom:6px}
+  .poi-imgs .sw-count{background:var(--accent);color:#fff;border-radius:8px;padding:0 6px;font-size:10px;font-weight:700;line-height:15px;min-width:15px;text-align:center}
+  .poi-img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:6px}
+  .poi-img-grid .poi-thumb{position:relative;width:100%;padding-top:100%;overflow:hidden;border-radius:6px;cursor:pointer;background:var(--line)}
+  .poi-img-grid .poi-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .poi-img-grid .poi-thumb .poi-del{position:absolute;top:2px;right:2px;width:18px;height:18px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;padding:0}
+  .poi-img-grid .poi-thumb:hover .poi-del{display:flex}
+  .poi-img-empty{color:var(--muted);font-size:10px;font-style:italic;padding:2px 0}
+  .poi-upload{display:flex;align-items:center;gap:4px}
+  .poi-upload label{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;border:1px dashed var(--accent2);border-radius:6px;padding:5px 8px;font-size:10px;color:var(--accent);cursor:pointer;transition:.15s;font-family:inherit}
+  .poi-upload label:hover{background:var(--accent2)}
+  .poi-upload input[type=file]{display:none}
+  /* 图片灯箱 */
+  .poi-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:99999;padding:20px;cursor:zoom-out}
+  .poi-lightbox.open{display:flex}
+  .poi-lightbox img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
   /* 心灵窗口: 弹层 modal */
   .soul-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px}
   .soul-modal.open{display:flex}
@@ -363,6 +381,53 @@ function saveSoulReview(poiKey, name, text){
   if(arr.length > 20) arr.length = 20;
   try{ localStorage.setItem(soulKey(poiKey), JSON.stringify(arr)); }catch(e){}
 }
+// 店铺图片 localStorage 存储 (key: zoneout_img_<poiKey>)
+const IMG_PREFIX = "zoneout_img_";
+function imgKey(poiKey){return IMG_PREFIX + poiKey;}
+function getPoiImages(poiKey){
+  try{
+    const raw = localStorage.getItem(imgKey(poiKey));
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){return [];}
+}
+function savePoiImage(poiKey, dataUrl){
+  const arr = getPoiImages(poiKey);
+  arr.unshift({url: dataUrl, ts: Date.now()});
+  if(arr.length > 12) arr.length = 12; // 最多12张
+  try{ localStorage.setItem(imgKey(poiKey), JSON.stringify(arr)); }catch(e){
+    // 超限则删旧的
+    if(arr.length > 1){ arr.length = Math.floor(arr.length/2); }
+    try{ localStorage.setItem(imgKey(poiKey), JSON.stringify(arr)); }catch(e2){}
+  }
+  return arr;
+}
+function deletePoiImage(poiKey, ts){
+  let arr = getPoiImages(poiKey);
+  arr = arr.filter(o=>o.ts !== ts);
+  try{ localStorage.setItem(imgKey(poiKey), JSON.stringify(arr)); }catch(e){}
+  return arr;
+}
+// 图片压缩: 将上传的图片压缩为缩略图(最大 480px, JPEG 0.7)
+function compressImage(file, cb){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const maxW = 480;
+      let w = img.width, h = img.height;
+      if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      cb(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 // 店铺收藏
 const FAV_KEY="zoneout_favs";
 function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'[]');}catch(e){return [];}}
@@ -479,6 +544,75 @@ function initSoulWindow(mk){
       openSoulWindow(poiKey, mk._soulName || '');
     });
   }
+  // 初始化图片区
+  const imgsEl = document.getElementById(swUid+'-imgs');
+  if(imgsEl && !imgsEl._bound){
+    imgsEl._bound = true;
+    renderPoiImgs(swUid, poiKey);
+  }
+}
+// 渲染店铺图片区
+function renderPoiImgs(swUid, poiKey){
+  const imgsEl = document.getElementById(swUid+'-imgs');
+  if(!imgsEl) return;
+  const imgs = getPoiImages(poiKey);
+  let html = '<div class="sw-title">📷 店铺图片 <span class="sw-count">'+imgs.length+'</span></div>';
+  if(imgs.length > 0){
+    html += '<div class="poi-img-grid">';
+    imgs.forEach(im=>{
+      html += '<div class="poi-thumb" data-url="'+im.url+'"><img src="'+im.url+'" alt="店铺照片"><button class="poi-del" data-poikey="'+esc(poiKey)+'" data-ts="'+im.ts+'" type="button" aria-label="删除图片">×</button></div>';
+    });
+    html += '</div>';
+  }else{
+    html += '<div class="poi-img-empty">还没有照片，快来上传第一张吧</div>';
+  }
+  html += '<div class="poi-upload"><label>📎 上传照片<input type="file" accept="image/*" data-poikey="'+esc(poiKey)+'" data-swuid="'+swUid+'"></label></div>';
+  imgsEl.innerHTML = html;
+  // 绑定上传
+  const fileInput = imgsEl.querySelector('input[type=file]');
+  if(fileInput){
+    fileInput.addEventListener('change', e=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      if(file.size > 5*1024*1024){ alert('图片不能超过5MB'); return; }
+      compressImage(file, dataUrl=>{
+        savePoiImage(fileInput.dataset.poikey, dataUrl);
+        renderPoiImgs(swUid, fileInput.dataset.poikey);
+      });
+    });
+  }
+  // 绑定点击放大
+  imgsEl.querySelectorAll('.poi-thumb img').forEach(img=>{
+    img.addEventListener('click', e=>{
+      e.stopPropagation();
+      openLightbox(img.parentElement.dataset.url);
+    });
+  });
+  // 绑定删除
+  imgsEl.querySelectorAll('.poi-del').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation(); e.preventDefault();
+      const pk = btn.dataset.poikey, ts = parseInt(btn.dataset.ts);
+      if(confirm('删除这张照片？')){
+        deletePoiImage(pk, ts);
+        renderPoiImgs(swUid, pk);
+      }
+    });
+  });
+}
+// 图片灯箱
+function openLightbox(url){
+  let lb = document.getElementById('poiLightbox');
+  if(!lb){
+    lb = document.createElement('div');
+    lb.id = 'poiLightbox';
+    lb.className = 'poi-lightbox';
+    lb.innerHTML = '<img src="" alt="放大查看">';
+    lb.addEventListener('click', ()=>lb.classList.remove('open'));
+    document.body.appendChild(lb);
+  }
+  lb.querySelector('img').src = url;
+  lb.classList.add('open');
 }
 
 // 心灵窗口: 弹层 modal 实现 (popup 内联精简版只显示最新 2 条, 点击"展开全部"打开此 modal 查看全部 20 条)
@@ -601,7 +735,7 @@ for(const p of DATA){
   mk._swUid = swUid;
   mk._soulName = p.n;
   const favInit = isFav(poiKey);
-  mk.bindPopup('<div class="pn-wrap"><div class="pn">'+esc(p.n)+'</div><button class="popup-fav'+(favInit?' on':'')+'" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'" aria-pressed="'+(favInit?'true':'false')+'" aria-label="'+(favInit?'取消收藏':'收藏')+'">'+(favInit?'♥':'♡')+'</button></div><div class="pa">'+esc(p.a||"地址不详")+'</div><div class="pt">'+esc(p.c)+' · '+esc(p.d)+' · '+esc(p.t)+'</div><a class="pl" href="'+mapurl+'" target="_blank" rel="noopener">在高德地图查看 ›</a><div class="sw-inline"><div class="sw-head"><span class="sw-title">✦ 心灵窗口 <span class="sw-count" id="'+swUid+'-cnt">0</span></span><a class="sw-more" href="#" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'">展开全部 ›</a></div><div class="sw-list" id="'+swUid+'-list"></div><textarea id="'+swUid+'-text" placeholder="写下你对这家店的感受…" maxlength="200"></textarea><div class="sw-row"><input id="'+swUid+'-name" type="text" placeholder="昵称(选填)" maxlength="20"><button class="sw-btn" id="'+swUid+'-btn" type="button">发布</button></div></div>', {maxWidth:300, maxHeight:340, autoPan:true, closeButton:true});
+  mk.bindPopup('<div class="pn-wrap"><div class="pn">'+esc(p.n)+'</div><button class="popup-fav'+(favInit?' on':'')+'" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'" aria-pressed="'+(favInit?'true':'false')+'" aria-label="'+(favInit?'取消收藏':'收藏')+'">'+(favInit?'♥':'♡')+'</button></div><div class="pa">'+esc(p.a||"地址不详")+'</div><div class="pt">'+esc(p.c)+' · '+esc(p.d)+' · '+esc(p.t)+'</div><a class="pl" href="'+mapurl+'" target="_blank" rel="noopener">在高德地图查看 ›</a><div class="sw-inline"><div class="sw-head"><span class="sw-title">✦ 心灵窗口 <span class="sw-count" id="'+swUid+'-cnt">0</span></span><a class="sw-more" href="#" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'">展开全部 ›</a></div><div class="sw-list" id="'+swUid+'-list"></div><textarea id="'+swUid+'-text" placeholder="写下你对这家店的感受…" maxlength="200"></textarea><div class="sw-row"><input id="'+swUid+'-name" type="text" placeholder="昵称(选填)" maxlength="20"><button class="sw-btn" id="'+swUid+'-btn" type="button">发布</button></div></div><div class="poi-imgs" id="'+swUid+'-imgs"></div>', {maxWidth:300, maxHeight:400, autoPan:true, closeButton:true});
   mk.bindTooltip(esc(p.n), {direction:'right', offset:[6,0], className:'cfd-tip', opacity:0.96});
   mk.on('popupopen', ()=>initSoulWindow(mk));
   // 点击标记仅高亮对应卡片(不滚动跳转), 弹窗自动在标记旁弹出
