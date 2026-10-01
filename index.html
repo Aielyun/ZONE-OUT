@@ -55,6 +55,11 @@
   .stat-l{font-size:12px;color:var(--muted);margin-top:2px}
   .map-wrap{position:relative;margin:0 0 16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:0 4px 16px rgba(0,0,0,.04)}
   #map{height:450px;width:100%}
+  /* 全屏样式 */
+  .map-wrap.fs{position:fixed!important;top:0;left:0;width:100vw;height:100vh;z-index:9999;margin:0;border-radius:0;border:none}
+  .map-wrap.fs #map,.map-wrap.fs #mapAll{height:100vh!important}
+  .map-fs-btn{position:absolute;top:10px;right:48px;z-index:700;background:var(--card);border:1px solid var(--line);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:.15s}
+  .map-fs-btn:hover{background:var(--accent2);color:var(--accent)}
   /* 暗色底图: 对瓦片反相+色相旋转 */
   .map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg);-webkit-filter:invert(1) hue-rotate(180deg)}
   .map-dark .leaflet-control-attribution{background:rgba(0,0,0,.4)!important;color:#aaa!important}
@@ -240,6 +245,7 @@
   <div class="map-panel active" id="panel-cluster">
     <div class="map-wrap">
       <div id="map"></div>
+      <button class="map-fs-btn" data-map="map" type="button" aria-label="全屏放大地图">⤢</button>
       <div class="layer-switch" data-target="map" role="group" aria-label="底图样式">
         <button class="layer-btn active" data-style="std" aria-pressed="true">标准</button>
         <button class="layer-btn" data-style="sat" aria-pressed="false">卫星</button>
@@ -251,6 +257,7 @@
   <div class="map-panel" id="panel-overview">
     <div class="map-wrap">
       <div id="mapAll" style="height:380px"></div>
+      <button class="map-fs-btn" data-map="mapAll" type="button" aria-label="全屏放大地图">⤢</button>
       <div class="layer-switch" data-target="mapAll" role="group" aria-label="底图样式">
         <button class="layer-btn active" data-style="std" aria-pressed="true">标准</button>
         <button class="layer-btn" data-style="sat" aria-pressed="false">卫星</button>
@@ -1188,6 +1195,28 @@ document.querySelectorAll('.layer-switch').forEach(sw=>{
     const b=e.target.closest('.layer-btn'); if(!b) return;
     setMapStyle(b.dataset.style, sw.dataset.target);
   });
+});
+// 地图全屏放大/退出
+document.querySelectorAll('.map-fs-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const mapId=btn.dataset.map;
+    const wrap=btn.closest('.map-wrap');
+    const isFs=wrap.classList.toggle('fs');
+    btn.textContent=isFs?'✕':'⤢';
+    btn.setAttribute('aria-label', isFs?'退出全屏':'全屏放大地图');
+    setTimeout(()=>{ const m=mapId==='map'?map:mapAll; m.invalidateSize(); m.invalidateSize(); },100);
+    setTimeout(()=>{ const m=mapId==='map'?map:mapAll; m.invalidateSize(); },300);
+  });
+});
+// ESC 退出全屏
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    document.querySelectorAll('.map-wrap.fs').forEach(wrap=>{
+      wrap.classList.remove('fs');
+      const btn=wrap.querySelector('.map-fs-btn'); if(btn){btn.textContent='⤢';btn.setAttribute('aria-label','全屏放大地图');}
+    });
+    setTimeout(()=>{map.invalidateSize();mapAll.invalidateSize();},100);
+  }
 });
 // 全局评价动态
 document.getElementById('soulGlobalBtn').addEventListener('click', openSoulGlobal);
