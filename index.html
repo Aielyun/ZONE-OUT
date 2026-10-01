@@ -60,6 +60,14 @@
   .map-wrap.fs #map,.map-wrap.fs #mapAll{height:100vh!important}
   .map-fs-btn{position:absolute;bottom:18px;right:10px;z-index:700;background:var(--card);border:1px solid var(--line);border-radius:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:.15s}
   .map-fs-btn:hover{background:var(--accent2);color:var(--accent)}
+  .map-loc-btn{position:absolute;bottom:18px;right:54px;z-index:700;background:var(--card);border:1px solid var(--line);border-radius:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:.15s}
+  .map-loc-btn:hover{background:var(--accent2);color:var(--accent)}
+  .map-loc-btn.locating{background:var(--accent);color:#fff;animation:pulse 1s infinite}
+  .map-loc-btn.on{background:var(--accent);color:#fff}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .my-loc-marker{width:20px;height:20px;border-radius:50%;background:#2c5f8a;border:3px solid #fff;box-shadow:0 0 0 4px rgba(44,95,138,.25),0 2px 6px rgba(0,0,0,.3);animation:locPulse 2s infinite}
+  @keyframes locPulse{0%,100%{box-shadow:0 0 0 4px rgba(44,95,138,.25),0 2px 6px rgba(0,0,0,.3)}50%{box-shadow:0 0 0 10px rgba(44,95,138,.08),0 2px 6px rgba(0,0,0,.3)}}
+  .my-loc-acc{border-radius:50%;background:rgba(44,95,138,.12);border:1px solid rgba(44,95,138,.3)}
   /* 暗色底图: 对瓦片反相+色相旋转 */
   .map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg);-webkit-filter:invert(1) hue-rotate(180deg)}
   .map-dark .leaflet-control-attribution{background:rgba(0,0,0,.4)!important;color:#aaa!important}
@@ -264,6 +272,7 @@
     <div class="map-wrap">
       <div id="map"></div>
       <button class="map-fs-btn" data-map="map" type="button" aria-label="全屏放大地图">⤢</button>
+      <button class="map-loc-btn" data-map="map" type="button" aria-label="定位我的位置">◎</button>
       <div class="layer-switch" data-target="map" role="group" aria-label="底图样式">
         <button class="layer-btn active" data-style="std" aria-pressed="true">标准</button>
         <button class="layer-btn" data-style="sat" aria-pressed="false">卫星</button>
@@ -276,6 +285,7 @@
     <div class="map-wrap">
       <div id="mapAll" style="height:380px"></div>
       <button class="map-fs-btn" data-map="mapAll" type="button" aria-label="全屏放大地图">⤢</button>
+      <button class="map-loc-btn" data-map="mapAll" type="button" aria-label="定位我的位置">◎</button>
       <div class="layer-switch" data-target="mapAll" role="group" aria-label="底图样式">
         <button class="layer-btn active" data-style="std" aria-pressed="true">标准</button>
         <button class="layer-btn" data-style="sat" aria-pressed="false">卫星</button>
@@ -1351,6 +1361,63 @@ document.addEventListener('keydown', e=>{
     });
     setTimeout(()=>{map.invalidateSize();mapAll.invalidateSize();},100);
   }
+});
+// 我的定位
+let myLocMarker=null, myLocAcc=null, myWatchId=null;
+const MAPS={'map':map,'mapAll':mapAll};
+function clearMyLoc(){
+  if(myLocMarker){myLocMarker.remove();myLocMarker=null;}
+  if(myLocAcc){myLocAcc.remove();myLocAcc=null;}
+}
+function showMyLoc(lat, ln, acc){
+  clearMyLoc();
+  const ll=[lat, ln];
+  // 精度圆
+  if(acc){ myLocAcc=L.circle(ll,{radius:acc,className:'my-loc-acc',fillOpacity:0.12,stroke:true,color:'#2c5f8a',weight:1}).addTo(map); }
+  // 蓝点
+  myLocMarker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="my-loc-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]}),interactive:false,zIndexOffset:1000}).addTo(map);
+  if(myLocAcc) myLocAcc.addTo(map);
+  map.setView(ll, 15, {animate:true});
+  // 同步到总览地图
+  if(myLocAcc) myLocAcc.addTo(mapAll);
+  L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="my-loc-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]}),interactive:false,zIndexOffset:1000}).addTo(mapAll);
+}
+document.querySelectorAll('.map-loc-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(!navigator.geolocation){ alert('您的浏览器不支持定位功能'); return; }
+    // 关闭已开启的定位
+    if(btn.classList.contains('on')){
+      btn.classList.remove('on');
+      if(myWatchId!==null){ navigator.geolocation.clearWatch(myWatchId); myWatchId=null; }
+      clearMyLoc();
+      // 清除mapAll上的标记
+      mapAll.eachLayer(l=>{ if(l instanceof L.Marker && l.options.icon && l.options.icon.options.html && l.options.icon.options.html.includes('my-loc-marker')) l.remove(); });
+      return;
+    }
+    document.querySelectorAll('.map-loc-btn').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on','locating');
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        btn.classList.remove('locating');
+        showMyLoc(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+        // 持续追踪
+        myWatchId=navigator.geolocation.watchPosition(
+          p=>{ showMyLoc(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+          ()=>{},
+          {enableHighAccuracy:true, maximumAge:5000, timeout:15000}
+        );
+      },
+      err=>{
+        btn.classList.remove('on','locating');
+        let msg='定位失败';
+        if(err.code===1) msg='定位权限被拒绝，请在浏览器设置中允许位置访问';
+        else if(err.code===2) msg='位置不可用，请检查GPS或网络';
+        else if(err.code===3) msg='定位超时，请重试';
+        alert(msg);
+      },
+      {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+    );
+  });
 });
 // 全局评价动态
 document.getElementById('soulGlobalBtn').addEventListener('click', openSoulGlobal);
