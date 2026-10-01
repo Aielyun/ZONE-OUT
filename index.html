@@ -70,6 +70,8 @@
   .search input{width:100%;padding:10px 16px 10px 38px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:var(--card);outline:none;transition:.15s}
   .search input:focus{border-color:var(--cur-accent);box-shadow:0 0 0 3px rgba(111,78,55,.12)}
   .search .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px}
+  .search-locate{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:.15s;line-height:1}
+  .search-locate:hover{background:var(--accent2);color:var(--accent)}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
   .chip{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;font-size:12px;cursor:pointer;transition:.15s;white-space:nowrap}
   .chip:hover{border-color:var(--accent2)}
@@ -296,7 +298,8 @@
   <div class="toolbar">
     <div class="search">
       <span class="ic">🔍</span>
-      <input id="q" type="search" placeholder="搜索店名或地址…" autocomplete="off" aria-label="搜索店名或地址">
+      <input id="q" type="search" placeholder="搜索店名或地址，回车在地图定位…" autocomplete="off" aria-label="搜索店名或地址">
+      <button class="search-locate" id="searchLocate" type="button" aria-label="在地图上查找">📍</button>
     </div>
     <div class="chips" id="chips">
       <button class="chip" id="favOnlyBtn" type="button">♥ 我的收藏<span class="cnt" id="favCnt">0</span></button>
@@ -594,7 +597,13 @@ for(const p of DATA){
   mk.bindPopup('<div class="pn-wrap"><div class="pn">'+esc(p.n)+'</div><button class="popup-fav'+(favInit?' on':'')+'" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'" aria-pressed="'+(favInit?'true':'false')+'" aria-label="'+(favInit?'取消收藏':'收藏')+'">'+(favInit?'♥':'♡')+'</button></div><div class="pa">'+esc(p.a||"地址不详")+'</div><div class="pt">'+esc(p.c)+' · '+esc(p.d)+' · '+esc(p.t)+'</div><a class="pl" href="'+mapurl+'" target="_blank" rel="noopener">在高德地图查看 ›</a><div class="sw-inline"><div class="sw-head"><span class="sw-title">✦ 心灵窗口 <span class="sw-count" id="'+swUid+'-cnt">0</span></span><a class="sw-more" href="#" data-poikey="'+esc(poiKey)+'" data-name="'+esc(p.n)+'">展开全部 ›</a></div><div class="sw-list" id="'+swUid+'-list"></div><textarea id="'+swUid+'-text" placeholder="写下你对这家店的感受…" maxlength="200"></textarea><div class="sw-row"><input id="'+swUid+'-name" type="text" placeholder="昵称(选填)" maxlength="20"><button class="sw-btn" id="'+swUid+'-btn" type="button">发布</button></div></div>', {maxWidth:300, maxHeight:340, autoPan:true, closeButton:true});
   mk.bindTooltip(esc(p.n), {direction:'right', offset:[6,0], className:'cfd-tip', opacity:0.96});
   mk.on('popupopen', ()=>initSoulWindow(mk));
-  mk.on('click', ()=>highlightRow(p.n, p.d, p.c));
+  // 点击标记仅高亮对应卡片(不滚动跳转), 弹窗自动在标记旁弹出
+  mk.on('click', ()=>{
+    document.querySelectorAll('.shop-card.hl').forEach(c=>c.classList.remove('hl'));
+    for(const c of document.querySelectorAll('.shop-card')){
+      if(c.dataset.name===p.n && c.dataset.d===p.d){c.classList.add('hl');break;}
+    }
+  });
   allMarkers.push({marker:mk, n:p.n, a:p.a, d:p.d, t:p.t, c:p.c, la:la, ln:ln, key:poiKey, swUid:swUid});
 }
 
@@ -993,6 +1002,22 @@ function _scrollToClusterMap(){
   if(mapWrap) mapWrap.scrollIntoView({behavior:'smooth', block:'start'});
 }
 $("#q").addEventListener("input", e=>{curQ=e.target.value; updateHash(); render();});
+// 搜索定位: 回车或点按钮 -> 在地图上找到第一个匹配店铺并弹窗
+function locateOnMapFromSearch(){
+  const q=curQ.trim().toLowerCase();
+  if(!q){return;}
+  const m=allMarkers.find(o=>o.n.toLowerCase().includes(q) || (o.a||'').toLowerCase().includes(q));
+  if(!m){return;}
+  _scrollToClusterMap();
+  setTimeout(()=>{
+    map.invalidateSize();
+    const doLocate=()=>{map.setView([m.la,m.ln],Math.max(map.getZoom(),16),{animate:true});m.marker.openPopup();};
+    if(clusterGroup.getVisibleParent(m.marker) instanceof L.MarkerCluster){clusterGroup.zoomToShowLayer(m.marker,doLocate);}
+    else doLocate();
+  },320);
+}
+$("#q").addEventListener("keydown", e=>{if(e.key==='Enter'){e.preventDefault();locateOnMapFromSearch();}});
+$("#searchLocate").addEventListener("click", locateOnMapFromSearch);
 $("#catTabs").addEventListener("click", e=>{const t=e.target.closest(".cat-tab");if(!t)return;setCat(t.dataset.cat);});
 $("#chips").addEventListener("click", e=>{const b=e.target.closest(".chip");if(!b)return;if(b.dataset.district)setDistrict(b.dataset.district);});
 $("#stats").addEventListener("click", e=>{const s=e.target.closest(".stat");if(!s)return;setDistrict(s.dataset.district);});
