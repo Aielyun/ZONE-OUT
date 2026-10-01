@@ -58,7 +58,7 @@
   /* 全屏样式 */
   .map-wrap.fs{position:fixed!important;top:0;left:0;width:100vw;height:100vh;z-index:9999;margin:0;border-radius:0;border:none}
   .map-wrap.fs #map,.map-wrap.fs #mapAll{height:100vh!important}
-  .map-fs-btn{position:absolute;top:10px;right:48px;z-index:700;background:var(--card);border:1px solid var(--line);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:.15s}
+  .map-fs-btn{position:absolute;bottom:18px;right:10px;z-index:700;background:var(--card);border:1px solid var(--line);border-radius:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.15);transition:.15s}
   .map-fs-btn:hover{background:var(--accent2);color:var(--accent)}
   /* 暗色底图: 对瓦片反相+色相旋转 */
   .map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg);-webkit-filter:invert(1) hue-rotate(180deg)}
@@ -568,10 +568,10 @@ function renderSoulModalList(poiKey){
 
 function cicon(c){return CAT_ICON[c]||"•";}
 
-const map = L.map('map', {center:[24.93,118.62], zoom:11, zoomControl:true, scrollWheelZoom:true, preferCanvas:true});
+const map = L.map('map', {center:[24.93,118.62], zoom:11, zoomControl:true, scrollWheelZoom:true, preferCanvas:true, attributionControl:false});
 const TILE_STD='https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}';
 const TILE_SAT='https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}';
-function mkLayer(url){return L.tileLayer(url,{subdomains:'1234',maxZoom:18,attribution:'高德地图'});}
+function mkLayer(url){return L.tileLayer(url,{subdomains:'1234',maxZoom:18});}
 let curTile=mkLayer(TILE_STD).addTo(map);
 let curSat=null;
 
