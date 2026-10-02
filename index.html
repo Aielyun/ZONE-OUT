@@ -1363,35 +1363,32 @@ document.addEventListener('keydown', e=>{
   }
 });
 // 我的定位
-let myLocMarker=null, myLocAcc=null, myWatchId=null;
-const MAPS={'map':map,'mapAll':mapAll};
+let myLocMarker=null, myLocAcc=null, myLocMarker2=null, myLocAcc2=null, myWatchId=null;
 function clearMyLoc(){
   if(myLocMarker){myLocMarker.remove();myLocMarker=null;}
   if(myLocAcc){myLocAcc.remove();myLocAcc=null;}
+  if(myLocMarker2){myLocMarker2.remove();myLocMarker2=null;}
+  if(myLocAcc2){myLocAcc2.remove();myLocAcc2=null;}
 }
+function locIcon(){return L.divIcon({className:'',html:'<div class="my-loc-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]});}
 function showMyLoc(lat, ln, acc){
   clearMyLoc();
   const ll=[lat, ln];
-  // 精度圆
+  // 集群地图
   if(acc){ myLocAcc=L.circle(ll,{radius:acc,className:'my-loc-acc',fillOpacity:0.12,stroke:true,color:'#2c5f8a',weight:1}).addTo(map); }
-  // 蓝点
-  myLocMarker=L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="my-loc-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]}),interactive:false,zIndexOffset:1000}).addTo(map);
-  if(myLocAcc) myLocAcc.addTo(map);
+  myLocMarker=L.marker(ll,{icon:locIcon(),interactive:false,zIndexOffset:1000}).addTo(map);
   map.setView(ll, 15, {animate:true});
-  // 同步到总览地图
-  if(myLocAcc) myLocAcc.addTo(mapAll);
-  L.marker(ll,{icon:L.divIcon({className:'',html:'<div class="my-loc-marker"></div>',iconSize:[20,20],iconAnchor:[10,10]}),interactive:false,zIndexOffset:1000}).addTo(mapAll);
+  // 总览地图（独立layer）
+  if(acc){ myLocAcc2=L.circle(ll,{radius:acc,className:'my-loc-acc',fillOpacity:0.12,stroke:true,color:'#2c5f8a',weight:1}).addTo(mapAll); }
+  myLocMarker2=L.marker(ll,{icon:locIcon(),interactive:false,zIndexOffset:1000}).addTo(mapAll);
 }
 document.querySelectorAll('.map-loc-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(!navigator.geolocation){ alert('您的浏览器不支持定位功能'); return; }
-    // 关闭已开启的定位
     if(btn.classList.contains('on')){
       btn.classList.remove('on');
       if(myWatchId!==null){ navigator.geolocation.clearWatch(myWatchId); myWatchId=null; }
       clearMyLoc();
-      // 清除mapAll上的标记
-      mapAll.eachLayer(l=>{ if(l instanceof L.Marker && l.options.icon && l.options.icon.options.html && l.options.icon.options.html.includes('my-loc-marker')) l.remove(); });
       return;
     }
     document.querySelectorAll('.map-loc-btn').forEach(b=>b.classList.remove('on'));
@@ -1400,7 +1397,6 @@ document.querySelectorAll('.map-loc-btn').forEach(btn=>{
       pos=>{
         btn.classList.remove('locating');
         showMyLoc(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-        // 持续追踪
         myWatchId=navigator.geolocation.watchPosition(
           p=>{ showMyLoc(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
           ()=>{},
@@ -1409,10 +1405,11 @@ document.querySelectorAll('.map-loc-btn').forEach(btn=>{
       },
       err=>{
         btn.classList.remove('on','locating');
-        let msg='定位失败';
-        if(err.code===1) msg='定位权限被拒绝，请在浏览器设置中允许位置访问';
-        else if(err.code===2) msg='位置不可用，请检查GPS或网络';
-        else if(err.code===3) msg='定位超时，请重试';
+        let msg='定位失败: ';
+        if(err.code===1) msg+='定位权限被拒绝，请在浏览器设置中允许位置访问';
+        else if(err.code===2) msg+='位置不可用，请检查GPS或网络';
+        else if(err.code===3) msg+='定位超时，请重试';
+        else msg+=err.message;
         alert(msg);
       },
       {enableHighAccuracy:true, timeout:10000, maximumAge:0}
