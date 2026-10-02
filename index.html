@@ -68,6 +68,9 @@
   .my-loc-marker{width:20px;height:20px;border-radius:50%;background:#2c5f8a;border:3px solid #fff;box-shadow:0 0 0 4px rgba(44,95,138,.25),0 2px 6px rgba(0,0,0,.3);animation:locPulse 2s infinite}
   @keyframes locPulse{0%,100%{box-shadow:0 0 0 4px rgba(44,95,138,.25),0 2px 6px rgba(0,0,0,.3)}50%{box-shadow:0 0 0 10px rgba(44,95,138,.08),0 2px 6px rgba(0,0,0,.3)}}
   .my-loc-acc{border-radius:50%;background:rgba(44,95,138,.12);border:1px solid rgba(44,95,138,.3)}
+  .loc-hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:800;background:rgba(44,95,138,.92);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.2);white-space:nowrap;pointer-events:none;animation:locHintIn .25s ease}
+  @keyframes locHintIn{from{opacity:0;transform:translateX(-50%) translateY(-8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  .loc-hint .loc-close{display:inline-block;margin-left:10px;cursor:pointer;pointer-events:auto;background:rgba(255,255,255,.25);border-radius:50%;width:20px;height:20px;line-height:20px;text-align:center;font-size:14px}
   /* 暗色底图: 对瓦片反相+色相旋转 */
   .map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg);-webkit-filter:invert(1) hue-rotate(180deg)}
   .map-dark .leaflet-control-attribution{background:rgba(0,0,0,.4)!important;color:#aaa!important}
@@ -1383,18 +1386,36 @@ function showMyLoc(lat, ln, acc){
   myLocMarker2=L.marker(ll,{icon:locIcon(),interactive:false,zIndexOffset:1000}).addTo(mapAll);
 }
 // 手动定位模式：点击地图设置我的位置
-let manualLocMode=false;
+let manualLocMode=false, locHintEl=null;
+function showLocHint(text){
+  hideLocHint();
+  locHintEl=document.createElement('div');
+  locHintEl.className='loc-hint';
+  locHintEl.innerHTML=text+' <span class="loc-close" onclick="hideLocHint();cancelManualLoc();">×</span>';
+  const wrap=document.querySelector('.map-panel.active .map-wrap');
+  if(wrap) wrap.appendChild(locHintEl);
+}
+function hideLocHint(){
+  if(locHintEl){locHintEl.remove();locHintEl=null;}
+}
+function cancelManualLoc(){
+  manualLocMode=false;
+  map.getContainer().style.cursor='';
+  mapAll.getContainer().style.cursor='';
+  document.querySelectorAll('.map-loc-btn').forEach(b=>b.classList.remove('on','locating'));
+}
 function enterManualLoc(){
   manualLocMode=true;
   map.getContainer().style.cursor='crosshair';
   mapAll.getContainer().style.cursor='crosshair';
-  alert('手动定位模式：请在地图上点击你所在的位置');
+  showLocHint('👆 请点击地图上你所在的位置');
 }
 map.on('click', e=>{
   if(!manualLocMode) return;
   manualLocMode=false;
   map.getContainer().style.cursor='';
   mapAll.getContainer().style.cursor='';
+  hideLocHint();
   showMyLoc(e.latlng.lat, e.latlng.lng, 20);
 });
 mapAll.on('click', e=>{
@@ -1402,6 +1423,7 @@ mapAll.on('click', e=>{
   manualLocMode=false;
   map.getContainer().style.cursor='';
   mapAll.getContainer().style.cursor='';
+  hideLocHint();
   showMyLoc(e.latlng.lat, e.latlng.lng, 20);
 });
 document.querySelectorAll('.map-loc-btn').forEach(btn=>{
