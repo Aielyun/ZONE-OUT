@@ -1382,9 +1382,30 @@ function showMyLoc(lat, ln, acc){
   if(acc){ myLocAcc2=L.circle(ll,{radius:acc,className:'my-loc-acc',fillOpacity:0.12,stroke:true,color:'#2c5f8a',weight:1}).addTo(mapAll); }
   myLocMarker2=L.marker(ll,{icon:locIcon(),interactive:false,zIndexOffset:1000}).addTo(mapAll);
 }
+// 手动定位模式：点击地图设置我的位置
+let manualLocMode=false;
+function enterManualLoc(){
+  manualLocMode=true;
+  map.getContainer().style.cursor='crosshair';
+  mapAll.getContainer().style.cursor='crosshair';
+  alert('手动定位模式：请在地图上点击你所在的位置');
+}
+map.on('click', e=>{
+  if(!manualLocMode) return;
+  manualLocMode=false;
+  map.getContainer().style.cursor='';
+  mapAll.getContainer().style.cursor='';
+  showMyLoc(e.latlng.lat, e.latlng.lng, 20);
+});
+mapAll.on('click', e=>{
+  if(!manualLocMode) return;
+  manualLocMode=false;
+  map.getContainer().style.cursor='';
+  mapAll.getContainer().style.cursor='';
+  showMyLoc(e.latlng.lat, e.latlng.lng, 20);
+});
 document.querySelectorAll('.map-loc-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    if(!navigator.geolocation){ alert('您的浏览器不支持定位功能'); return; }
     if(btn.classList.contains('on')){
       btn.classList.remove('on');
       if(myWatchId!==null){ navigator.geolocation.clearWatch(myWatchId); myWatchId=null; }
@@ -1392,28 +1413,31 @@ document.querySelectorAll('.map-loc-btn').forEach(btn=>{
       return;
     }
     document.querySelectorAll('.map-loc-btn').forEach(b=>b.classList.remove('on'));
-    btn.classList.add('on','locating');
-    navigator.geolocation.getCurrentPosition(
-      pos=>{
-        btn.classList.remove('locating');
-        showMyLoc(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-        myWatchId=navigator.geolocation.watchPosition(
-          p=>{ showMyLoc(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
-          ()=>{},
-          {enableHighAccuracy:true, maximumAge:5000, timeout:15000}
-        );
-      },
-      err=>{
-        btn.classList.remove('on','locating');
-        let msg='定位失败: ';
-        if(err.code===1) msg+='定位权限被拒绝，请在浏览器设置中允许位置访问';
-        else if(err.code===2) msg+='位置不可用，请检查GPS或网络';
-        else if(err.code===3) msg+='定位超时，请重试';
-        else msg+=err.message;
-        alert(msg);
-      },
-      {enableHighAccuracy:true, timeout:10000, maximumAge:0}
-    );
+    btn.classList.add('on');
+    // 自动定位
+    if(navigator.geolocation){
+      btn.classList.add('locating');
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          btn.classList.remove('locating');
+          showMyLoc(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+          myWatchId=navigator.geolocation.watchPosition(
+            p=>{ showMyLoc(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+            ()=>{},
+            {enableHighAccuracy:true, maximumAge:5000, timeout:15000}
+          );
+        },
+        ()=>{
+          btn.classList.remove('locating');
+          // 自动定位失败 -> 进入手动定位
+          enterManualLoc();
+        },
+        {enableHighAccuracy:true, timeout:8000, maximumAge:0}
+      );
+    }else{
+      // 不支持自动定位 -> 手动
+      enterManualLoc();
+    }
   });
 });
 // 全局评价动态
